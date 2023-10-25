@@ -1,0 +1,203 @@
+#import necessary libraries
+import pandas as pd
+import numpy as np
+import re
+import os
+import time
+import tqdm
+import string
+from collections import Counter
+
+#sklearn
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer,TfidfVectorizer
+from sklearn.preprocessing import MultiLabelBinarizer,LabelEncoder
+from sklearn.linear_model import LogisticRegression, SGDClassifier, LogisticRegressionCV
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import f1_score, accuracy_score,average_precision_score,recall_score, classification_report,roc_auc_score, \
+roc_curve, confusion_matrix, precision_score, make_scorer
+from sklearn.model_selection import cross_val_score, GridSearchCV, StratifiedKFold, train_test_split
+
+#nltk
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
+from nltk.stem.porter import PorterStemmer
+from nltk.tokenize import RegexpTokenizer, word_tokenize
+from nltk.util import ngrams
+
+# tensorflow
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.layers import Reshape,Input,Embedding, MaxPool1D, Lambda,Dropout,Conv1D,Conv2D,Activation, Dense, Bidirectional,GlobalMaxPool1D,GlobalMaxPooling1D, LSTM, SpatialDropout1D,Masking,Layer
+from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.initializers import TruncatedNormal
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.metrics import CategoricalAccuracy
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.callbacks import ModelCheckpoint,EarlyStopping
+from tensorflow.keras import initializers, regularizers, constraints, optimizers, layers
+import tensorflow.keras.backend as K
+from tensorflow.keras.preprocessing import text, sequence
+from tensorflow.keras.preprocessing.text import Tokenizer
+
+## stopwords
+nltk.download('stopwords')
+stop_words = set(stopwords.words('english'))
+
+###### Text Cleaning #######
+#defining the function to remove punctuation
+def remove_punctuation(text):
+    punctuationfree="".join([i for i in text if i not in string.punctuation])
+    return punctuationfree
+#storing the puntuation free text
+new_data_df['clean_blurb']= new_data_df['Blurb'].apply(lambda x:remove_punctuation(x))
+new_data_df.head()
+
+#converting the text to lower case
+new_data_df['clean_blurb']= new_data_df['clean_blurb'].apply(lambda x: x.lower())
+
+#Removing contractions, we can update the dictionary with new contractions
+contractions = {  "ain't": "am not",'what’s':"what is","aren't": "are not","can’t":"cannot", "can't": "cannot", "can't've": "cannot have","'cause": "because", "could've": "could have",
+"couldn't": "could not", "couldn't've": "could not have", "didn't": "did not", "doesn't": "does not", "don't": "do not", "hadn't": "had not", "hadn't've": "had not have",
+"hasn't": "has not", "haven't": "have not", "he'd": "he would", "he'd've": "he would have", "he'll": "he will", "he's": "he is", "how'd": "how did",
+"how'll": "how will", "how's": "how is", "i'd": "i would", "i'll": "i will", "i'm": "i am", "i've": "i have", "isn't": "is not", "it'd": "it would",
+"it'll": "it will", "it's": "it is", "let's": "let us", "ma'am": "madam", "mayn't": "may not", "might've": "might have", "mightn't": "might not", "must've": "must have",
+"mustn't": "must not", "needn't": "need not", "oughtn't": "ought not", "shan't": "shall not", "sha'n't": "shall not", "she'd": "she would", "she'll": "she will",
+"she's": "she is", "should've": "should have", "shouldn't": "should not", "that'd": "that would", "that's": "that is", "there'd": "there had", "there's": "there is",
+"they'd": "they would", "they'll": "they will", "they're": "they are", "they've": "they have", "wasn't": "was not", "we'd": "we would", "we'll": "we will",
+"we're": "we are", "we've": "we have", "weren't": "were not", "what'll": "what will", "what're": "what are", "what's": "what is", "what've": "what have",
+"where'd": "where did", "where's": "where is", "who'll": "who will", "who's": "who is", "won't": "will not", "wouldn't": "would not", "you'd": "you would",
+"you'll": "you will", "you're": "you are", "thx"   : "thanks"
+}
+
+def contractions_removal(text):
+    return " ".join([contractions[word] if word in contractions else word for word in text.split() ])
+
+new_data_df['clean_blurb']=new_data_df['clean_blurb'].apply(contractions_removal)
+
+#remove stopwords
+def remove_stopwords(text):
+    """custom function to remove the stopwords"""
+    return " ".join([word for word in str(text).split() if word not in stop_words])
+
+new_data_df["clean_blurb"] = new_data_df["clean_blurb"].apply(lambda text: remove_stopwords(text))
+new_data_df.head()
+
+#### Data Preparation
+#set the hyper-parameters
+vocab_size = 1000 # make the top list of words (common words)
+embedding_dim = 64
+max_length = 200
+trunc_type = 'post'
+padding_type = 'post'
+oov_tok = '<OOV>' # OOV = Out of Vocabulary
+training_portion = .9
+
+#split the dataset into train & test and # use one hot encoding since our target is categorical
+X_train, X_test, y_train, y_test = train_test_split(new_data_df['clean_blurb'], new_data_df['Class'], test_size=0.2, stratify=new_data_df['Class'])
+train_blurbs = X_train.values
+train_labels = pd.get_dummies(y_train).values
+validation_blurbs = X_test.values
+validation_labels = pd.get_dummies(y_test).values
+
+print(f"train_blurbs {len(train_blurbs)}")
+print("train_labels", len(train_labels))
+print("validation_blurbs", len(validation_blurbs))
+print("validation_labels", len(validation_labels))
+
+
+#tokenizing the text
+tokenizer = Tokenizer(num_words = vocab_size, oov_token=oov_tok)
+tokenizer.fit_on_texts(train_blurbs)
+word_index = tokenizer.word_index
+#sequence truncating and padding
+train_sequences = tokenizer.texts_to_sequences(train_blurbs)
+train_padded = pad_sequences(train_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type)
+validation_sequences = tokenizer.texts_to_sequences(validation_blurbs)
+validation_padded = pad_sequences(validation_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type)
+
+### CNN Model Backbone for CNN algorithms
+
+#hyper parameters
+max_features = 1000
+embedding_dims = 64
+filters = 250
+kernel_size = 3
+hidden_dims = 250
+
+# CNN with max pooling imeplementation
+model = Sequential()
+# we start off with an efficient embedding layer which maps
+# our vocab indices into embedding_dims dimensions
+model.add(Embedding(vocab_size, embedding_dim))
+
+# we add a Convolution1D, which will learn filters
+# word group filters of size filter_length:
+model.add(Conv1D(filters,
+                 kernel_size,
+                 padding='valid',
+                 activation='relu',
+                 strides=1))
+# we use max pooling:
+model.add(GlobalMaxPooling1D())
+
+# We add a hidden layer:
+model.add(Dense(hidden_dims))
+model.add(Dropout(0.2))
+model.add(Activation('relu'))
+model.add(Dense(3, activation='softmax'))  # use 4 because we have 4 categories
+
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy'])
+
+num_epochs =  # Adjust based on training time
+history = model.fit(train_padded, train_labels, epochs=num_epochs, validation_split = 0.2, verbose=2)
+
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy'])
+
+num_epochs = # Adjust based on training time
+history = model.fit(train_padded, train_labels, epochs=num_epochs, validation_split = 0.2, verbose=2)
+
+# summarize history for accuracy
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+# summarize history for loss
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+
+# Evaluate Model 
+preds = model.predict(validation_padded)
+labels = ["Class 1", 'Class 2', 'Class 3', 'Class 4']
+valid_labels = [labels[np.argmax(pred)] for pred in validation_labels]
+preds_labels = [labels[np.argmax(pred)] for pred in preds]
+print("[INFO] evaluating network...")
+print(classification_report(valid_labels, preds_labels, digits=3))
+
+# Predictions
+txt = ["side effects could include would limited nausea vomiting fatigue"]
+
+seq = tokenizer.texts_to_sequences(txt)
+padded = pad_sequences(seq, maxlen=max_length, padding=padding_type, truncating=trunc_type)
+pred = model.predict(padded)
+
+print("Class Probabilities")
+print(pred)
+print(labels[np.argmax(pred)])
