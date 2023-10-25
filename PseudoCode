@@ -1,3 +1,53 @@
+1. Import necessary libraries and tools for data manipulation, ML, NLP, and deep learning.
+
+2. Initialize a list of stopwords in English from the nltk library.
+
+3. Define a function to clean text:
+    a. Remove punctuation.
+    b. Convert text to lowercase.
+    c. Remove contractions using a predefined dictionary.
+    d. Remove stopwords.
+
+4. Clean the 'Blurb' column from the dataset 'new_data_df' and save the cleaned text in a new column 'clean_blurb'.
+
+5. Set hyperparameters for text preprocessing and CNN model:
+    a. Vocabulary size, embedding dimensions, max length of sequences, type of truncation, padding type, OOV token, training data portion, etc.
+    b. Hyperparameters specific to CNN model like the number of filters, kernel size, hidden dimensions, etc.
+
+6. Split the dataset into training and validation sets:
+    a. Use 80% of the data for training and 20% for validation, and stratify based on the 'Class' column.
+    b. One-hot encode the target 'Class' column for training and validation.
+
+7. Tokenize the text:
+    a. Fit a tokenizer on the training blurbs.
+    b. Convert training and validation blurbs to sequences.
+    c. Pad sequences to a maximum length.
+
+8. Define a CNN model:
+    a. Add an embedding layer.
+    b. Add a 1D convolutional layer.
+    c. Use max-pooling.
+    d. Add a dense hidden layer with a ReLU activation.
+    e. Add dropout for regularization.
+    f. Add a dense output layer with a softmax activation.
+    g. Compile the model with categorical cross-entropy loss and the Adam optimizer, and set accuracy as the metric.
+
+9. Train the CNN model on the training data with a certain number of epochs (to be decided based on training time) and validate on 20% of the training data.
+
+10. Plot training and validation accuracy and loss over epochs.
+
+11. Evaluate the model on the validation set:
+    a. Predict classes for validation set.
+    b. Print a classification report with precision, recall, and F1-score.
+
+12. Use the trained model to predict the class for a given text example:
+    a. Tokenize and pad the given text.
+    b. Predict class probabilities using the model.
+    c. Print the predicted class.
+
+
+
+For JCO CCI Manuscript : Breakdown by class
 Diarrhea : Class 1 (951), Class 2 (933), Class 3(120), Class 4 (20)
 Fatigue :  Class 1 (389), Class 2 (1137), Class 3 (0), Class 4 (4)
 Nausea : Class 1 (61), Class 2 (12), Class 3 (73),  Class 4 (11) 
