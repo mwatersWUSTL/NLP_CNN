@@ -45,6 +45,53 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.preprocessing import text, sequence
 from tensorflow.keras.preprocessing.text import Tokenizer
 
+## Window Generation/Entity Recognition
+###### This code requires adapting based on output from EMR pull, provided here is an example ######
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from fuzzywuzzy import fuzz
+from nltk.tokenize import word_tokenize
+import numpy as np
+
+def fuzzy_entity_recognition(text, entities, threshold=90):
+    # Tokenize the text
+    tokens = word_tokenize(text)
+
+    recognized_entities = []
+
+    # Loop through each token and perform fuzzy matching with the entities
+    for i, token in enumerate(tokens):
+        for entity in entities:
+            # Calculate fuzzy match score
+            score = fuzz.token_sort_ratio(token, entity)
+            if score >= threshold:
+                # Extract context (10 tokens before and after, if available)
+                start = max(0, i - 10)
+                end = min(len(tokens), i + 11)
+                context = tokens[start:end]
+
+                # Pad the context for homogeneous length
+                padded_context = pad_sequences([context], maxlen=21, dtype=object, padding='post', truncating='post')
+
+                # Flatten the padded array to a list
+                padded_context = np.array(padded_context).flatten().tolist()
+
+                recognized_entities.append({
+                    'entity': token,
+                    'context': padded_context,
+                    'match_score': score
+                })
+
+    return recognized_entities
+
+# Example usage
+example_text = "This is an example text for entity recognition."
+example_entities = ["entity"]
+results = fuzzy_entity_recognition(example_text, example_entities)
+
+#########
+## Once entities are identified and windowed, create downstream classifier 
+##########
+
 ## stopwords
 nltk.download('stopwords')
 stop_words = set(stopwords.words('english'))
